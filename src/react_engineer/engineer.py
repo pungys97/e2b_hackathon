@@ -24,6 +24,7 @@ load_dotenv()
 TEMPLATES_DIR = (
     Path(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))) / "templates"
 )
+TEMPLATE_ID_MEM_2GB = "jr829l6nnqz8gwyfpzbh"
 
 
 class ReactGPTEngineer:
@@ -237,8 +238,7 @@ class ReactGPTEngineer:
         logger.info("Setting up E2B sandbox for testing...")
 
         # Create a new sandbox instance
-        template_id = "jr829l6nnqz8gwyfpzbh"
-        sandbox = Sandbox(template_id, timeout=timeout)
+        sandbox = Sandbox(TEMPLATE_ID_MEM_2GB, timeout=timeout)
 
         # Upload all generated files
         file_paths = glob.glob(f"{self.output_dir}/**/*.*", recursive=True)
@@ -259,7 +259,7 @@ class ReactGPTEngineer:
 
         # Run npm build
         logger.info("Building the React app...")
-        build_process = sandbox.command.run(
+        build_process = sandbox.commands.run(
             "cd react-app && npm run build", timeout=timeout
         )
 
