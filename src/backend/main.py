@@ -38,11 +38,6 @@ async def create_app(request: WebsiteRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy"}
-
 if __name__ == "__main__":
     # Get server settings from environment
     HOST = os.getenv("HOST", "0.0.0.0")
