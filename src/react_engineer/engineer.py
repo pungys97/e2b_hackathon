@@ -335,7 +335,7 @@ class ReactGPTEngineer:
             logger.error(f"Error during iteration: {e}")
             raise
 
-    def run(self, prompt: str, max_iterations: int = 2) -> Dict[str, Any]:
+    def run(self, prompt: str, max_iterations: int = 2) -> str | None:
         """
         Generate a React app based on prompt and test it in the sandbox.
 
@@ -365,18 +365,17 @@ class ReactGPTEngineer:
             iterations += 1
 
         if sandbox:
-            logger.info("✅ React app built successfully!")
+            logger.info("✅ React app built successfully! Serving the app...")
 
             # Serve the react app
             sandbox.commands.run("cd react-app && npm start --port 3000", timeout=300)
-            url = "https://" + sandbox.get_host(3000)
-            logger.infor(f"Serving app: {url}")
+            app_url = "https://" + sandbox.get_host(3000)
         else:
             logger.warning(
                 "❌ React app build failed. Check the test results for details."
             )
 
-        return result
+        return app_url
 
 
 def main():
@@ -402,12 +401,14 @@ def main():
     # Initialize and run React GPT Engineer
     engineer = ReactGPTEngineer()
 
-    result = engineer.run(prompt=prompt)
+    app_url = engineer.run(prompt=prompt)
 
-    if result["success"]:
-        logger.info("✅ Final result: React app built successfully!")
+    if app_url:
+        logger.info(f"✅ Final result: {app_url}")
     else:
         logger.warning("❌ Final result: React app build failed.")
+
+    return app_url
 
 
 if __name__ == "__main__":
