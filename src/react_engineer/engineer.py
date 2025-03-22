@@ -2,8 +2,9 @@ import os
 import json
 import argparse
 import logging
+import time
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple
 
 import openai
 from dotenv import load_dotenv
@@ -18,6 +19,9 @@ logger = logging.getLogger("react_gpt_engineer")
 
 load_dotenv()
 
+# Default templates path
+TEMPLATES_DIR = Path(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))) / "templates"
+
 
 class ReactGPTEngineer:
     """
@@ -29,44 +33,11 @@ class ReactGPTEngineer:
     FOLDER_STRUCTURE = {
         "src": {
             "components": {},
-            "hooks": {},
-            "utils": {},
             "styles": {},
             "assets": {},
         },
         "public": {},
-        "tests": {},
     }
-
-    # Predefined sections for components
-    COMPONENT_TEMPLATE = """
-import React from 'react';
-import './styles.css';
-
-// SECTION: Component Props Interface
-interface {name}Props {{
-  // Define props here
-{props}
-}}
-
-// SECTION: Component Definition
-const {name}: React.FC<{name}Props> = ({{{params}}}) => {{
-  // SECTION: Hooks and State
-{hooks}
-
-  // SECTION: Helper Functions
-{helpers}
-
-  // SECTION: Render Logic
-  return (
-    <div className="{name.toLowerCase()}-container">
-{jsx}
-    </div>
-  );
-}};
-
-export default {name};
-"""
 
     def __init__(
             self,
@@ -74,6 +45,8 @@ export default {name};
             model: str = "gpt-4o",
             temperature: float = 0.7,
             output_dir: str = "./react-app",
+            templates_dir: Optional[str] = None,
+            max_iterations: int = 1,
     ):
         """
         Initialize the React GPT Engineer.
@@ -83,6 +56,8 @@ export default {name};
             model: OpenAI model to use
             temperature: Temperature for generation (higher = more creative)
             output_dir: Directory to store generated code
+            templates_dir: Directory containing prompt templates
+            max_iterations: Maximum number of iterations to attempt fixing issues
         """
         self.openai_api_key = openai_api_key or os.environ.get("OPENAI_API_KEY")
         if not self.openai_api_key:
@@ -92,6 +67,9 @@ export default {name};
         self.model = model
         self.temperature = temperature
         self.output_dir = Path(output_dir)
+        self.templates_dir = Path(templates_dir) if templates_dir else TEMPLATES_DIR
+        self.max_iterations = max_iterations
+        self.conversation_history = []
 
     def create_folder_structure(self):
         """Create the predefined folder structure for the React app"""
@@ -123,16 +101,10 @@ export default {name};
                 "scripts": {
                     "start": "react-scripts start",
                     "build": "react-scripts build",
-                    "test": "react-scripts test",
-                    "eject": "react-scripts eject"
                 },
                 "eslintConfig": {
                     "extends": ["react-app", "react-app/jest"]
                 },
-                "browserslist": {
-                    "production": [">0.2%", "not dead", "not op_mini all"],
-                    "development": ["last 1 chrome version", "last 1 firefox version", "last 1 safari version"]
-                }
             }, f, indent=2)
 
         with open(self.output_dir / "README.md", "w") as f:
@@ -141,6 +113,24 @@ export default {name};
         with open(self.output_dir / ".gitignore", "w") as f:
             f.write("node_modules\n.env\nbuild\n.DS_Store\n")
 
+    def load_template(self, template_name: str) -> str:
+        """
+        Load a prompt template from file.
+        
+        Args:
+            template_name: Name of the template file
+            
+        Returns:
+            Content of the template file
+        """
+        template_path = self.templates_dir / template_name
+        if not template_path.exists():
+            logger.warning(f"Template file {template_path} not found. Using default template.")
+            return ""
+            
+        with open(template_path, "r") as f:
+            return f.read()
+    
     def generate_app(self, prompt: str) -> Dict[str, str]:
         """
         Generate a simple React application based on the prompt.
@@ -153,66 +143,36 @@ export default {name};
         """
         logger.info("Generating React components based on the prompt...")
 
-        system_message = """
-        You are ReactGPTEngineer, an expert React developer. Your task is to create a simple React application based on the user's requirements.
+        # Load system prompt from template file
+        system_message = self.load_template("system_prompt.txt")
 
-        Follow these guidelines:
-        1. Create ONLY simple React components with clean, minimal code
-        2. Follow the predefined folder structure:
-           - src/
-             - components/
-             - hooks/
-             - utils/
-             - styles/
-             - assets/
-           - public/
-           - tests/
-        3. Each component should have clearly defined sections:
-           - Component Props Interface
-           - Component Definition
-           - Hooks and State
-           - Helper Functions
-           - Render Logic (JSX)
-        4. Use TypeScript for type safety
-        5. Keep the application simple and focused on core functionality
-        6. Include basic CSS in separate files
-        7. Create a simple App.tsx file that imports and uses the components
-        8. Respond in JSON format with the following structure:
-           {
-               "files": [
-                   {"path": "src/components/Component.tsx", "content": "// Code here"},
-                   {"path": "src/styles/styles.css", "content": "/* CSS here */"},
-                   {"path": "src/App.tsx", "content": "// App code here"}
-               ],
-               "description": "Brief description of what the app does"
-           }
+        assert system_message.strip() != "", "System prompt template is empty"
 
-        DO NOT include complex state management libraries, routing, or advanced features unless specifically requested.
-        Keep everything as simple as possible while fulfilling the requirements.
-        """
+        messages = [
+            {"role": "system", "content": system_message},
+            {"role": "user", "content": prompt}
+        ]
+        
+        # Store conversation history for iterations
+        self.conversation_history = messages.copy()
 
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
                 temperature=self.temperature,
                 response_format={"type": "json_object"},
-                messages=[
-                    {"role": "system", "content": system_message},
-                    {"role": "user", "content": prompt}
-                ]
+                messages=messages
             )
 
             response_content = response.choices[0].message.content
+            self.conversation_history.append({"role": "assistant", "content": response_content})
+            
             response_json = json.loads(response_content)
 
             # Convert to dictionary mapping paths to content
             files_dict = {}
             for file_info in response_json.get("files", []):
                 files_dict[file_info["path"]] = file_info["content"]
-
-            # Store description for README
-            if "description" in response_json:
-                files_dict["description"] = response_json["description"]
 
             return files_dict
 
@@ -234,12 +194,6 @@ export default {name};
 
         # Create folder structure first
         self.create_folder_structure()
-
-        # Update README with app description if available
-        if "description" in components:
-            with open(self.output_dir / "README.md", "w") as f:
-                f.write(f"# {self.output_dir.name}\n\n{components['description']}\n")
-            del components["description"]
 
         # Save all generated files
         for file_path, content in components.items():
@@ -263,6 +217,13 @@ export default {name};
         """
         logger.info("Setting up E2B sandbox for testing...")
 
+        return {
+            "success": False,
+            "stage": "npm install",
+            "stdout": "",
+            "stderr": input(),
+        }
+
         # Create a new sandbox instance
         sandbox = Sandbox()
         try:
@@ -271,7 +232,7 @@ export default {name};
 
             # Run npm install
             logger.info("Installing dependencies in sandbox...")
-            install_process = sandbox.process.start("cd /app && npm install")
+            install_process = sandbox.commands.run("cd /app && npm install")
             install_stdout, install_stderr = install_process.wait(timeout=timeout)
 
             if install_process.exit_code != 0:
@@ -284,7 +245,7 @@ export default {name};
 
             # Try building the app
             logger.info("Building the React app...")
-            build_process = sandbox.process.start("cd /app && npm run build")
+            build_process = sandbox.commands.run("cd /app && npm run build")
             build_stdout, build_stderr = build_process.wait(timeout=timeout)
 
             build_success = build_process.exit_code == 0
@@ -301,36 +262,183 @@ export default {name};
             logger.error(f"Error during sandbox testing: {e}")
             return {"success": False, "error": str(e)}
 
-        finally:
-            # Clean up the sandbox
-            sandbox.kill()
+        # finally:
+        #     # Clean up the sandbox
+        #     sandbox.kill()
+            
+    def iterate_with_feedback(self, feedback: str, test_results: Dict[str, Any] = None) -> Dict[str, str]:
+        """
+        Improve the application based on feedback and/or test results.
+        
+        Args:
+            feedback: User feedback or requirements for iteration
+            test_results: Results from testing the application (optional)
+            
+        Returns:
+            Dictionary mapping file paths to updated content
+        """
+        logger.info("Iterating on the application with feedback...")
+        
+        # Load the feedback template
+        feedback_template = self.load_template("iteration_prompt.txt")
+
+        assert feedback_template.strip() != "", "Feedback template is empty"
+            
+        # Prepare context about current state
+        file_listing = "\n".join(f"- {path}" for path in os.listdir(self.output_dir) 
+                                if Path(self.output_dir / path).is_file())
+        
+        # Create feedback prompt
+        feedback_message = f"""
+        Please improve the React application based on the following feedback:
+        
+        FEEDBACK:
+        {feedback}
+        
+        CURRENT FILES:
+        {file_listing}
+        
+        TEST RESULTS:
+        {json.dumps(test_results) if test_results else "No test results available."}
+        """
+        
+        # Add to conversation history
+        self.conversation_history.append({"role": "user", "content": feedback_message})
+        
+        # Get AI response
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                temperature=self.temperature,
+                response_format={"type": "json_object"},
+                messages=self.conversation_history
+            )
+            
+            response_content = response.choices[0].message.content
+            self.conversation_history.append({"role": "assistant", "content": response_content})
+            
+            response_json = json.loads(response_content)
+            
+            # Extract updated files
+            files_dict = {}
+            for file_info in response_json.get("files", []):
+                files_dict[file_info["path"]] = file_info["content"]
+                
+            return files_dict
+            
+        except Exception as e:
+            logger.error(f"Error during iteration: {e}")
+            raise
+            
+    def iterative_development(self, initial_prompt: str, feedback_rounds: List[str] = None) -> Dict[str, Any]:
+        """
+        Run a full iterative development cycle with initial generation and feedback rounds.
+        
+        Args:
+            initial_prompt: Initial prompt describing the React app to build
+            feedback_rounds: List of feedback prompts for each iteration
+            
+        Returns:
+            Dictionary containing the final app files and test results
+        """
+        logger.info("Starting iterative development process...")
+        
+        # Generate initial app
+        app_files = self.generate_app(initial_prompt)
+        output_path = self.save_app(app_files)
+
+        # Test the initial app
+        test_results = self.test_in_sandbox()
+        iteration_results = [{
+            "iteration": 0,
+            "files": app_files,
+            "test_results": test_results,
+            "success": test_results.get("success", False)
+        }]
+        
+        # Process feedback rounds if provided
+        if feedback_rounds and not test_results.get("success", False):
+            for i, feedback in enumerate(feedback_rounds, 1):
+                if i > self.max_iterations:
+                    logger.warning(f"Reached maximum iterations limit ({self.max_iterations})")
+                    break
+                    
+                logger.info(f"Starting iteration {i}...")
+                updated_files = self.iterate_with_feedback(feedback, test_results)
+                
+                # Update only the files that were changed
+                for file_path, content in updated_files.items():
+                    if file_path == "explanation":
+                        continue  # Skip explanation, not a real file
+                    
+                    app_files[file_path] = content
+                
+                # Save the updated app
+                output_path = self.save_app(app_files)
+                
+                # Test the updated app
+                test_results = self.test_in_sandbox()
+                
+                # Record iteration results
+                iteration_results.append({
+                    "iteration": i,
+                    "files": updated_files,
+                    "test_results": test_results,
+                    "success": test_results.get("success", False),
+                })
+                
+                # Stop if successful
+                if test_results.get("success", False):
+                    logger.info(f"Iteration {i} succeeded!")
+                    break
+                
+                # Small delay to avoid API rate limits
+                time.sleep(1)
+        
+        return {
+            "files": app_files,
+            "output_path": output_path,
+            "test_results": test_results,
+            "iterations": iteration_results,
+            "success": test_results.get("success", False)
+        }
 
     def run(self, prompt: str):
         """
         Generate a React app based on prompt and test it in the sandbox.
-
+        
         Args:
             prompt: Detailed description of the React app to build
-
+            feedback_rounds: List of feedback prompts for each iteration (optional)
+            auto_fix: Whether to automatically try to fix build errors (default: True)
+            
         Returns:
             Dictionary containing app files and test results
         """
-        # Generate React app
-        app_files = self.generate_app(prompt)
+        # Use iterative development
+        result = self.iterative_development(prompt, feedback_rounds)
 
-        # Save app to disk
-        output_path = self.save_app(app_files)
+        # Auto-fix if enabled and initial build failed
+        if auto_fix and not result["iterations"][0]["success"] and not feedback_rounds:
+            iterations = result["iterations"]
+            last_error = iterations[-1]["test_results"].get("stderr", "")
 
-        # Test app in sandbox
-        test_results = self.test_in_sandbox()
+            # Generate automated feedback based on error
+            auto_feedback = f"""
+            The build failed with the following errors:
+            {last_error}
+            
+            Please fix the issues to make the build succeed.
+            """
 
-        result = {
-            "files": app_files,
-            "output_path": output_path,
-            "test_results": test_results
-        }
+            logger.info("Automatically attempting to fix build errors...")
+            fixed_result = self.iterative_development(prompt, [auto_feedback])
 
-        if test_results["success"]:
+            # Combine iterations from both runs
+            fixed_result["iterations"] = iterations + fixed_result["iterations"][1:]
+            result = fixed_result
+
+        if result["success"]:
             logger.info("✅ React app built successfully!")
         else:
             logger.warning("❌ React app build failed. Check the test results for details.")
@@ -342,9 +450,6 @@ def main():
     parser = argparse.ArgumentParser(description="React GPT Engineer")
     parser.add_argument("--prompt", type=str, help="Detailed prompt describing the React app to build")
     parser.add_argument("--prompt-file", type=str, help="Path to file containing the detailed prompt")
-    parser.add_argument("--model", type=str, default="gpt-4o", help="OpenAI model to use")
-    parser.add_argument("--temperature", type=float, default=0.7, help="Temperature for generation")
-    parser.add_argument("--output-dir", type=str, default="./react-app", help="Directory to store generated React app")
 
     args = parser.parse_args()
 
@@ -358,26 +463,14 @@ def main():
         parser.error("Either --prompt or --prompt-file must be provided")
 
     # Initialize and run React GPT Engineer
-    engineer = ReactGPTEngineer(
-        model=args.model,
-        temperature=args.temperature,
-        output_dir=args.output_dir
-    )
+    engineer = ReactGPTEngineer()
 
-    result = engineer.run(prompt)
+    result = engineer.run(prompt=prompt)
 
-    # Save the result to a JSON file
-    result_path = Path(args.output_dir) / "generation_result.json"
-    with open(result_path, "w") as f:
-        # Format the result for better JSON output
-        result_json = {
-            "output_path": result["output_path"],
-            "test_results": result["test_results"],
-            "files": [{"path": k, "content": v} for k, v in result["files"].items()]
-        }
-        json.dump(result_json, f, indent=2)
-
-    logger.info(f"Results saved to {result_path}")
+    if result["success"]:
+        logger.info("✅ Final result: React app built successfully!")
+    else:
+        logger.warning("❌ Final result: React app build failed.")
 
 
 if __name__ == "__main__":
