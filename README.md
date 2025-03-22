@@ -16,7 +16,9 @@ A tool that generates React applications from websites using AI with E2B sandbox
 
 1. Install dependencies:
 ```bash
-pip install -e .
+brew install uv
+uv sync
+source .venv/bin/activate
 ```
 
 2. Run the backend:
@@ -31,6 +33,7 @@ The backend will be available at http://localhost:8000.
 
 1. Install dependencies:
 ```bash
+brew install node@20
 cd src/frontend
 npm install
 ```
