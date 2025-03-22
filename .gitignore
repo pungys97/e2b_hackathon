@@ -46,3 +46,6 @@ react-app/
 *.swp
 *.swo
 *~
+
+# Jupyter Notebooks
+*.ipynb
