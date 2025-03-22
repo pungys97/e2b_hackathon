@@ -33,8 +33,6 @@ class ReactGPTEngineer:
     FOLDER_STRUCTURE = {
         "src": {
             "components": {},
-            "styles": {},
-            "assets": {},
         },
         "public": {},
     }
@@ -228,13 +226,6 @@ class ReactGPTEngineer:
             Test results dictionary
         """
         logger.info("Setting up E2B sandbox for testing...")
-
-        return {
-            "success": False,
-            "stage": "npm install",
-            "stdout": "",
-            "stderr": input(),
-        }
 
         # Create a new sandbox instance
         sandbox = Sandbox()
