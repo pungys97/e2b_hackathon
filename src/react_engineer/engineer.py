@@ -9,6 +9,7 @@ from typing import Dict, Any, Optional
 import openai
 from dotenv import load_dotenv
 from e2b import Sandbox
+from pydantic import BaseModel
 
 # Configure logging
 logging.basicConfig(
@@ -23,6 +24,11 @@ TEMPLATES_DIR = (
     Path(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))) / "templates"
 )
 TEMPLATE_ID_MEM_2GB = "jr829l6nnqz8gwyfpzbh"
+
+
+class SandboxError(BaseModel):
+    std_out: str
+    std_err: str
 
 
 class ReactGPTEngineer:
@@ -223,7 +229,7 @@ class ReactGPTEngineer:
 
         return str(self.output_dir)
 
-    def test_in_sandbox(self, timeout: int = 600) -> Sandbox | None:
+    def test_in_sandbox(self, timeout: int = 600) -> Sandbox | SandboxError:
         """
         Test the generated React app in an E2B sandbox.
 
@@ -248,23 +254,29 @@ class ReactGPTEngineer:
 
         # Run npm install
         logger.info("Installing dependencies in sandbox...")
-        try:
-            sandbox.commands.run("cd react-app && npm install", timeout=timeout)
-        except:
-            return None
+        install_result = sandbox.commands.run(
+            "cd react-app && npm install", timeout=timeout
+        )
+
+        if install_result.exit_code != 0:
+            return SandboxError(
+                std_out=install_result.stdout, std_err=install_result.stderr
+            )
 
         # Run npm build
         logger.info("Building the React app...")
-        try:
-            sandbox.commands.run("cd react-app && npm run build", timeout=timeout)
-        except:
-            return None
+        build_result = sandbox.commands.run(
+            "cd react-app && npm run build", timeout=timeout
+        )
+
+        if build_result.exit_code != 0:
+            return SandboxError(
+                std_out=build_result.stdout, std_err=build_result.stderr
+            )
 
         return sandbox
 
-    def iterate_with_feedback(
-        self, test_results: Dict[str, Any] = None
-    ) -> Dict[str, str]:
+    def iterate_with_feedback(self, test_results: Sandbox = None) -> Dict[str, str]:
         """
         Improve the application based on feedback and/or test results.
 
@@ -296,7 +308,7 @@ class ReactGPTEngineer:
         {file_listing}
         
         TEST RESULTS:
-        {json.dumps(test_results) if test_results else "No test results available."}
+        {test_results.model_dump_json() if test_results else "No test results available."}
         """
 
         # Add to conversation history
@@ -355,9 +367,9 @@ class ReactGPTEngineer:
 
         while iterations <= max_iterations:
             sandbox = self.test_in_sandbox()
-            if sandbox:
+            if isinstance(sandbox, Sandbox):
                 break
-            app_files = self.iterate_with_feedback(result)
+            app_files = self.iterate_with_feedback(sandbox)
             self.save_app(app_files)
             iterations += 1
 
