@@ -3,14 +3,12 @@ import os
 import json
 import argparse
 import logging
-import time
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, Any, Optional
 
 import openai
 from dotenv import load_dotenv
 from e2b import Sandbox
-from pydantic import BaseModel
 
 # Configure logging
 logging.basicConfig(

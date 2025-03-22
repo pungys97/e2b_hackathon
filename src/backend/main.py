@@ -5,6 +5,9 @@ from dotenv import load_dotenv
 import os
 from fastapi.middleware.cors import CORSMiddleware
 
+from src.backend.site_to_markdown import process_website_to_md
+from src.react_engineer.engineer import ReactGPTEngineer
+
 # Load environment variables
 load_dotenv()
 
@@ -29,12 +32,12 @@ class WebsiteRequest(BaseModel):
 @app.post("/generate-app")
 async def create_app(request: WebsiteRequest):
     try:
-        print(request)
-        # Placeholder for actual implementation
-        return {"status": "success", "message": "App generated successfully", "files": [
-            {"filename": "index.html", "content": "<!DOCTYPE html><html><body><h1>Generated App</h1></body></html>"},
-            {"filename": "App.js", "content": "function App() { return <div>Generated App</div>; }"}
-        ]}
+        prompt = process_website_to_md(str(request.url))
+        # Initialize and run React GPT Engineer
+        engineer = ReactGPTEngineer()
+
+        built_site_url = engineer.run(prompt=prompt)
+        return {"site_url": built_site_url}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
