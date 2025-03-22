@@ -354,6 +354,9 @@ class ReactGPTEngineer:
         self.save_app(app_files)
         iterations = 1
 
+        sandbox = None
+        app_url = None
+
         while iterations <= max_iterations:
             sandbox = self.test_in_sandbox()
             if sandbox:
@@ -366,7 +369,7 @@ class ReactGPTEngineer:
             logger.info("✅ React app built successfully! Serving the app...")
 
             # Serve the react app
-            sandbox.commands.run("cd react-app && npm start --port 3000", timeout=300)
+            sandbox.commands.run("cd react-app && npm start --port 3000", background=True)
             app_url = "https://" + sandbox.get_host(3000)
         else:
             logger.warning(
