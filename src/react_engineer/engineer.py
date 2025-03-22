@@ -4,7 +4,7 @@ import json
 import argparse
 import logging
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Optional
 
 import openai
 from dotenv import load_dotenv
@@ -229,7 +229,7 @@ class ReactGPTEngineer:
 
         return str(self.output_dir)
 
-    def test_in_sandbox(self, timeout: int = 600) -> Sandbox | SandboxError:
+    def test_in_sandbox(self, timeout: int = 600) -> Sandbox | str:
         """
         Test the generated React app in an E2B sandbox.
 
@@ -254,29 +254,21 @@ class ReactGPTEngineer:
 
         # Run npm install
         logger.info("Installing dependencies in sandbox...")
-        install_result = sandbox.commands.run(
-            "cd react-app && npm install", timeout=timeout
-        )
-
-        if install_result.exit_code != 0:
-            return SandboxError(
-                std_out=install_result.stdout, std_err=install_result.stderr
-            )
+        try:
+            sandbox.commands.run("cd react-app && npm install", timeout=timeout)
+        except Exception as e:
+            return str(e)
 
         # Run npm build
         logger.info("Building the React app...")
-        build_result = sandbox.commands.run(
-            "cd react-app && npm run build", timeout=timeout
-        )
-
-        if build_result.exit_code != 0:
-            return SandboxError(
-                std_out=build_result.stdout, std_err=build_result.stderr
-            )
+        try:
+            sandbox.commands.run("cd react-app && npm run build", timeout=timeout)
+        except Exception as e:
+            return str(e)
 
         return sandbox
 
-    def iterate_with_feedback(self, test_results: Sandbox = None) -> Dict[str, str]:
+    def iterate_with_feedback(self, test_results: str) -> Dict[str, str]:
         """
         Improve the application based on feedback and/or test results.
 
@@ -308,7 +300,7 @@ class ReactGPTEngineer:
         {file_listing}
         
         TEST RESULTS:
-        {test_results.model_dump_json() if test_results else "No test results available."}
+        {test_results}
         """
 
         # Add to conversation history
@@ -355,25 +347,25 @@ class ReactGPTEngineer:
         # Use iterative development
         logger.info("Starting iterative development process...")
 
-        result = {"success": False}
-
         # Generate initial app
         app_files = self.generate_app(prompt)
         self.save_app(app_files)
         iterations = 1
 
-        sandbox = None
+        sandbox = ""
         app_url = None
 
         while iterations <= max_iterations:
             sandbox = self.test_in_sandbox()
-            if isinstance(sandbox, Sandbox):
+            if not isinstance(sandbox, str):
                 break
+
+            logger.error(sandbox)
             app_files = self.iterate_with_feedback(sandbox)
             self.save_app(app_files)
             iterations += 1
 
-        if sandbox:
+        if not isinstance(sandbox, str):
             logger.info("✅ React app built successfully! Serving the app...")
 
             # Serve the react app
