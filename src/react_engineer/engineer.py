@@ -352,8 +352,8 @@ class ReactGPTEngineer:
         result = {"success": False}
 
         # Generate initial app
-        # app_files = self.generate_app(prompt)
-        # self.save_app(app_files)
+        app_files = self.generate_app(prompt)
+        self.save_app(app_files)
         iterations = 1
 
         while iterations <= max_iterations:
