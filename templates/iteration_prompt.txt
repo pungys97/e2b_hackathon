@@ -5,12 +5,13 @@ Review the existing code provided and make targeted improvements without disrupt
 In your response, include ONLY the files that need to be changed or added. Follow this JSON format:
 {
     "files": [
-        {"path": "src/components/Component.tsx", "content": "// Updated or new code here"},
+        {"path": "src/components/Component.js", "content": "// Updated or new code here"},
         {"path": "src/styles/styles.css", "content": "/* Updated or new CSS here */"}
     ],
     "changes": "Brief explanation of the changes and enhancements made"
 }
 
-Focus ONLY on fixing any bugs or issues
-
-DO NOT make architectural changes unless specifically requested.
+1. Focus ONLY on fixing any bugs or issues
+2. Make sure I am able to run the application with npm start without any errors, when I navigate to the project directory,
+we do not use any bundler like Webpack or Vite, so do not use any advanced features that require a bundler
+3. DO NOT make architectural changes unless specifically requested.

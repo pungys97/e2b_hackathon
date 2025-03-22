@@ -105,6 +105,18 @@ class ReactGPTEngineer:
                 "eslintConfig": {
                     "extends": ["react-app", "react-app/jest"]
                 },
+                "browserslist": {
+                    "production": [
+                        ">0.2%",
+                        "not dead",
+                        "not op_mini all"
+                    ],
+                    "development": [
+                        "last 1 chrome version",
+                        "last 1 firefox version",
+                        "last 1 safari version"
+                    ]
+                }
             }, f, indent=2)
 
         with open(self.output_dir / "README.md", "w") as f:
@@ -266,12 +278,11 @@ class ReactGPTEngineer:
         #     # Clean up the sandbox
         #     sandbox.kill()
             
-    def iterate_with_feedback(self, feedback: str, test_results: Dict[str, Any] = None) -> Dict[str, str]:
+    def iterate_with_feedback(self, test_results: Dict[str, Any] = None) -> Dict[str, str]:
         """
         Improve the application based on feedback and/or test results.
         
         Args:
-            feedback: User feedback or requirements for iteration
             test_results: Results from testing the application (optional)
             
         Returns:
@@ -280,20 +291,17 @@ class ReactGPTEngineer:
         logger.info("Iterating on the application with feedback...")
         
         # Load the feedback template
-        feedback_template = self.load_template("iteration_prompt.txt")
+        feedback_message = self.load_template("iteration_prompt.txt")
 
-        assert feedback_template.strip() != "", "Feedback template is empty"
+        assert feedback_message.strip() != "", "Feedback template is empty"
             
         # Prepare context about current state
         file_listing = "\n".join(f"- {path}" for path in os.listdir(self.output_dir) 
                                 if Path(self.output_dir / path).is_file())
         
         # Create feedback prompt
-        feedback_message = f"""
-        Please improve the React application based on the following feedback:
-        
-        FEEDBACK:
-        {feedback}
+        feedback_message += f"""
+        Current build issues:
         
         CURRENT FILES:
         {file_listing}
@@ -329,114 +337,35 @@ class ReactGPTEngineer:
         except Exception as e:
             logger.error(f"Error during iteration: {e}")
             raise
-            
-    def iterative_development(self, initial_prompt: str, feedback_rounds: List[str] = None) -> Dict[str, Any]:
-        """
-        Run a full iterative development cycle with initial generation and feedback rounds.
-        
-        Args:
-            initial_prompt: Initial prompt describing the React app to build
-            feedback_rounds: List of feedback prompts for each iteration
-            
-        Returns:
-            Dictionary containing the final app files and test results
-        """
-        logger.info("Starting iterative development process...")
-        
-        # Generate initial app
-        app_files = self.generate_app(initial_prompt)
-        output_path = self.save_app(app_files)
 
-        # Test the initial app
-        test_results = self.test_in_sandbox()
-        iteration_results = [{
-            "iteration": 0,
-            "files": app_files,
-            "test_results": test_results,
-            "success": test_results.get("success", False)
-        }]
-        
-        # Process feedback rounds if provided
-        if feedback_rounds and not test_results.get("success", False):
-            for i, feedback in enumerate(feedback_rounds, 1):
-                if i > self.max_iterations:
-                    logger.warning(f"Reached maximum iterations limit ({self.max_iterations})")
-                    break
-                    
-                logger.info(f"Starting iteration {i}...")
-                updated_files = self.iterate_with_feedback(feedback, test_results)
-                
-                # Update only the files that were changed
-                for file_path, content in updated_files.items():
-                    if file_path == "explanation":
-                        continue  # Skip explanation, not a real file
-                    
-                    app_files[file_path] = content
-                
-                # Save the updated app
-                output_path = self.save_app(app_files)
-                
-                # Test the updated app
-                test_results = self.test_in_sandbox()
-                
-                # Record iteration results
-                iteration_results.append({
-                    "iteration": i,
-                    "files": updated_files,
-                    "test_results": test_results,
-                    "success": test_results.get("success", False),
-                })
-                
-                # Stop if successful
-                if test_results.get("success", False):
-                    logger.info(f"Iteration {i} succeeded!")
-                    break
-                
-                # Small delay to avoid API rate limits
-                time.sleep(1)
-        
-        return {
-            "files": app_files,
-            "output_path": output_path,
-            "test_results": test_results,
-            "iterations": iteration_results,
-            "success": test_results.get("success", False)
-        }
-
-    def run(self, prompt: str):
+    def run(self, prompt: str, max_iterations: int = 2) -> Dict[str, Any]:
         """
         Generate a React app based on prompt and test it in the sandbox.
         
         Args:
             prompt: Detailed description of the React app to build
-            feedback_rounds: List of feedback prompts for each iteration (optional)
-            auto_fix: Whether to automatically try to fix build errors (default: True)
+            max_iterations: Maximum number of iterations to attempt fixing issues
             
         Returns:
             Dictionary containing app files and test results
         """
         # Use iterative development
-        result = self.iterative_development(prompt, feedback_rounds)
+        logger.info("Starting iterative development process...")
 
-        # Auto-fix if enabled and initial build failed
-        if auto_fix and not result["iterations"][0]["success"] and not feedback_rounds:
-            iterations = result["iterations"]
-            last_error = iterations[-1]["test_results"].get("stderr", "")
+        result = {"success": False}
 
-            # Generate automated feedback based on error
-            auto_feedback = f"""
-            The build failed with the following errors:
-            {last_error}
-            
-            Please fix the issues to make the build succeed.
-            """
+        # Generate initial app
+        app_files = self.generate_app(prompt)
+        self.save_app(app_files)
+        iterations = 1
 
-            logger.info("Automatically attempting to fix build errors...")
-            fixed_result = self.iterative_development(prompt, [auto_feedback])
-
-            # Combine iterations from both runs
-            fixed_result["iterations"] = iterations + fixed_result["iterations"][1:]
-            result = fixed_result
+        while iterations <= max_iterations:
+            result = self.test_in_sandbox()
+            if result["success"]:
+                break
+            app_files = self.iterate_with_feedback(result)
+            self.save_app(app_files)
+            iterations += 1
 
         if result["success"]:
             logger.info("✅ React app built successfully!")
