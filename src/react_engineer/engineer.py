@@ -248,20 +248,16 @@ class ReactGPTEngineer:
 
         # Run npm install
         logger.info("Installing dependencies in sandbox...")
-        install_process = sandbox.commands.run(
-            "cd react-app && npm install", timeout=timeout
-        )
-
-        if install_process.exit_code != 0:
+        try:
+            sandbox.commands.run("cd react-app && npm install", timeout=timeout)
+        except:
             return None
 
         # Run npm build
         logger.info("Building the React app...")
-        build_process = sandbox.commands.run(
-            "cd react-app && npm run build", timeout=timeout
-        )
-
-        if build_process.exit_code != 0:
+        try:
+            sandbox.commands.run("cd react-app && npm run build", timeout=timeout)
+        except:
             return None
 
         return sandbox
@@ -369,7 +365,9 @@ class ReactGPTEngineer:
             logger.info("✅ React app built successfully! Serving the app...")
 
             # Serve the react app
-            sandbox.commands.run("cd react-app && npm start --port 3000", background=True)
+            sandbox.commands.run(
+                "cd react-app && npm start --port 3000", background=True
+            )
             app_url = "https://" + sandbox.get_host(3000)
         else:
             logger.warning(
