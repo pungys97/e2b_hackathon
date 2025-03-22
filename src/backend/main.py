@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, HttpUrl
 import uvicorn
@@ -5,11 +7,13 @@ from dotenv import load_dotenv
 import os
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.backend.site_to_markdown import process_website_to_md
+from site_to_markdown import process_website_to_md
 from src.react_engineer.engineer import ReactGPTEngineer
 
 # Load environment variables
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 # Get settings from environment
 API_TITLE = os.getenv("API_TITLE", "E2B GPT Engineer")
@@ -39,6 +43,7 @@ async def create_app(request: WebsiteRequest):
         built_site_url = engineer.run(prompt=prompt)
         return {"site_url": built_site_url}
     except Exception as e:
+        logger.error(e)
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
