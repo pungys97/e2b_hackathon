@@ -27,31 +27,33 @@ function InputForm({ onSubmit, isLoading }) {
     <div className="input-form-container">
       <form className="input-form" onSubmit={handleSubmit}>
         <div className="form-group">
-          <label htmlFor="website-url">Website URL</label>
+          <label htmlFor="website-url">Enter Your Website URL</label>
           <input
             type="text"
             id="website-url"
-            placeholder="https://example.com"
+            placeholder="https://your-old-website.com"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             disabled={isLoading}
             className={error ? 'input-error' : ''}
+            autoFocus
           />
           {error && <p className="error-message">{error}</p>}
         </div>
         
         <button type="submit" className="submit-button" disabled={isLoading}>
-          {isLoading ? 'Generating...' : 'Generate React App'}
+          {isLoading ? 'Transforming Website...' : 'Transform My Website'}
         </button>
       </form>
       
       <div className="form-info">
-        <h3>How it works</h3>
+        <h3>How It Works</h3>
         <ul>
-          <li>Enter a website URL to analyze</li>
-          <li>Our AI extracts key content and features</li>
-          <li>E2B Sandboxes generate and test a React app</li>
-          <li>Download the generated app code</li>
+          <li>Enter any outdated website URL to begin the transformation</li>
+          <li>Our AI analyzes the design, content, and structure</li>
+          <li>We generate a modern React application using OpenAI and E2B Sandboxes</li>
+          <li>Receive a beautifully redesigned version of your website</li>
+          <li>Download the complete source code for your new site</li>
         </ul>
       </div>
     </div>

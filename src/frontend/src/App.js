@@ -11,6 +11,7 @@ function App() {
     setError(null);
     
     try {
+      console.log('Sending request with URL:', url);
       const response = await fetch('http://localhost:8000/generate-app', {
         method: 'POST',
         headers: {
@@ -19,12 +20,23 @@ function App() {
         body: JSON.stringify({ url }),
       });
       
+      console.log('Response status:', response.status);
+      
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to generate app');
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        let errorMessage;
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.detail || 'Failed to generate app';
+        } catch (e) {
+          errorMessage = 'Failed to generate app: ' + response.status;
+        }
+        throw new Error(errorMessage);
       }
       
       const data = await response.json();
+      console.log('Success response:', data);
     } catch (err) {
       console.error('Error generating app:', err);
       setError(err.message);
@@ -36,8 +48,8 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>E2B GPT Engineer</h1>
-        <p>Generate React apps from websites using AI</p>
+        <h1>✨ 90's Website Beautifier</h1>
+        <p>Transform your outdated website into a modern, sleek design with our AI-powered service</p>
       </header>
       
       <main className="app-main">
@@ -46,14 +58,15 @@ function App() {
         {loading && (
           <div className="loading-container">
             <div className="loading-spinner"></div>
-            <p>Analyzing website and generating app...</p>
-            <p className="loading-note">This may take a minute or two</p>
+            <h3>Transforming Your Website</h3>
+            <p>Our AI is analyzing your website's structure and content...</p>
+            <p className="loading-note">This process may take a minute or two to complete</p>
           </div>
         )}
         
         {error && (
           <div className="error-container">
-            <h3>Error</h3>
+            <h3>⚠️ Error Occurred</h3>
             <p>{error}</p>
           </div>
         )}
@@ -62,7 +75,7 @@ function App() {
       </main>
       
       <footer className="app-footer">
-        <p>Created with E2B Sandboxes</p>
+        <p>Built with ❤️ using React, FastAPI and <a href="https://e2b.dev" target="_blank" rel="noopener noreferrer">E2B Sandboxes</a></p>
       </footer>
     </div>
   );
